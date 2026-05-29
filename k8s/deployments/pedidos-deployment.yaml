@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pedidos-deployment
+  namespace: pedidos-veloz
+  labels:
+    app: pedidos
+    version: "1.0.0"
+spec:
+  replicas: 2
+  # Estratégia Rolling Update — substitui pods gradualmente, sem downtime
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Sobe 1 pod novo antes de derrubar o antigo
+      maxUnavailable: 0  # Garante zero downtime durante o deploy
+  selector:
+    matchLabels:
+      app: pedidos
+  template:
+    metadata:
+      labels:
+        app: pedidos
+        version: "1.0.0"
+    spec:
+      # Segurança no nível do Pod
+      securityContext:
+        runAsNonRoot: true       # Nunca executa como root
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: pedidos
+          image: amisori/pedidos-veloz-pedidos:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          # Segurança no nível do Container
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: pedidos-veloz-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pedidos-veloz-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: pedidos-veloz-config
+                  key: POSTGRES_HOST
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: pedidos-veloz-config
+                  key: POSTGRES_DB
+            - name: DATABASE_URL
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):5432/$(POSTGRES_DB)"
+          # Readiness: Kubernetes só envia tráfego quando o pod estiver pronto
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          # Liveness: Kubernetes reinicia o pod se travar
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"

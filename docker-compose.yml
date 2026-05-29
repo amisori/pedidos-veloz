@@ -1,0 +1,142 @@
+version: "3.9"
+
+# ============================================================
+# Pedidos Veloz — Ambiente Local de Desenvolvimento
+# Sobe todos os serviços com: docker compose up --build
+# ============================================================
+
+services:
+
+  # ----------------------------------------------------------
+  # Infraestrutura
+  # ----------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: pedidos-veloz-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-pedidos_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: pedidos-veloz-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+    ports:
+      - "15672:15672"   # Management UI (dev only)
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------
+  # Microsserviços
+  # ----------------------------------------------------------
+  pedidos:
+    build:
+      context: ./services/pedidos
+      dockerfile: Dockerfile
+    container_name: pedidos-veloz-pedidos
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-pedidos_db}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672/
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  pagamentos:
+    build:
+      context: ./services/pagamentos
+      dockerfile: Dockerfile
+    container_name: pedidos-veloz-pagamentos
+    restart: unless-stopped
+    environment:
+      PAYMENT_GATEWAY_URL: ${PAYMENT_GATEWAY_URL:-https://sandbox.gateway.example.com}
+      PAYMENT_API_KEY: ${PAYMENT_API_KEY:-sandbox-key-dev}
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  estoque:
+    build:
+      context: ./services/estoque
+      dockerfile: Dockerfile
+    container_name: pedidos-veloz-estoque
+    restart: unless-stopped
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: pedidos-veloz-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"     # Único ponto de entrada exposto ao host
+    environment:
+      PEDIDOS_SERVICE_URL:    http://pedidos:8000
+      PAGAMENTOS_SERVICE_URL: http://pagamentos:8001
+      ESTOQUE_SERVICE_URL:    http://estoque:8002
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      pedidos:
+        condition: service_healthy
+      pagamentos:
+        condition: service_healthy
+      estoque:
+        condition: service_healthy
+
+# ----------------------------------------------------------
+# Redes
+# Frontend: apenas o gateway é exposto externamente
+# Backend:  comunicação interna entre serviços
+# ----------------------------------------------------------
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true   # isolada — sem acesso direto à internet
+
+# ----------------------------------------------------------
+# Volumes persistentes
+# ----------------------------------------------------------
+volumes:
+  postgres_data:
+    driver: local

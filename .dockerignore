@@ -1,0 +1,12 @@
+# Reduz o contexto enviado ao Docker daemon
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.env
+*.env
+.git/
+.gitignore
+README.md
+tests/

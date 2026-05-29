@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pedidos-veloz-config
+  namespace: pedidos-veloz
+  labels:
+    app: pedidos-veloz
+    managed-by: kubectl
+data:
+  # URLs de serviços internos (comunicação intra-cluster via Service DNS)
+  PEDIDOS_SERVICE_URL: "http://pedidos-svc:8000"
+  PAGAMENTOS_SERVICE_URL: "http://pagamentos-svc:8001"
+  ESTOQUE_SERVICE_URL: "http://estoque-svc:8002"
+
+  # Banco de dados — host e nome (credenciais no Secret)
+  POSTGRES_HOST: "postgres-svc"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "pedidos_db"
+
+  # RabbitMQ — host (credenciais no Secret)
+  RABBITMQ_HOST: "rabbitmq-svc"
+  RABBITMQ_PORT: "5672"
+
+  # Configurações de aplicação
+  LOG_LEVEL: "INFO"
+  APP_ENV: "production"
