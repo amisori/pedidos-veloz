@@ -5,7 +5,7 @@
 
 **Aluno:** Victor Pereira de Souza | **RA:** 73589  
 **Repositório:** https://github.com/amisori/pedidos-veloz  
-**Vídeo Pitch:** 🎥 [Link do YouTube — adicionar após gravação]
+**Vídeo Pitch:** 🎥 https://youtu.be/m_ZfVAgK-tE
 
 ---
 
