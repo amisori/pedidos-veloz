@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import httpx
 import os
@@ -43,7 +43,6 @@ async def ready():
                 resultados[nome] = "unreachable"
 
     todos_ok = all(v == "ok" for v in resultados.values())
-    status_code = 200 if todos_ok else 503
     return {"status": "ready" if todos_ok else "degraded", "servicos": resultados}
 
 
@@ -129,5 +128,5 @@ async def consultar_pedido(pedido_id: str):
                 raise HTTPException(status_code=404, detail="Pedido não encontrado")
             r.raise_for_status()
             return r.json()
-        except httpx.RequestError as e:
+        except httpx.RequestError:
             raise HTTPException(status_code=503, detail="Serviço de pedidos indisponível")
